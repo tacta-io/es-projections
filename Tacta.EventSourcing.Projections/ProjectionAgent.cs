@@ -27,10 +27,10 @@ namespace Tacta.EventSourcing.Projections
 
         public ProjectionAgent(IEventStream eventStream, IProjection[] projections)
         {
-            _eventStream = eventStream ?? throw new InvalidEnumArgumentException("You have to provide an event stream");
+            _eventStream = eventStream ?? throw new InvalidEnumArgumentException("ProjectionAgent: You have to provide an event stream");
             _projections = projections.ToList();
 
-            if (_projections == null) Console.WriteLine("ProjectionAgent: no projections registered");
+            if (_projections == null) Console.WriteLine("ProjectionAgent: No projections registered");
         }
 
         public IDisposable Run(Action<Configuration> config)
@@ -52,8 +52,10 @@ namespace Tacta.EventSourcing.Projections
         {
             if (_dispatchInProgress) return;
 
-            _dispatchInProgress = true;
+            try
             {
+                _dispatchInProgress = true;
+
                 IReadOnlyCollection<IDomainEvent> events = new List<IDomainEvent>();
 
                 foreach (var projection in _projections.OrderBy(p => p.Offset().GetAwaiter().GetResult()))
@@ -64,9 +66,9 @@ namespace Tacta.EventSourcing.Projections
                     {
                         var from = offset + 1;
 
-                        events = _eventStream.Load(from, _configuration.BatchSize)
-                            .GetAwaiter()
-                            .GetResult();
+                        events = _eventStream.Load(@from, _configuration.BatchSize)
+                                     .GetAwaiter()
+                                     .GetResult() ?? new List<IDomainEvent>();
                     }
 
                     foreach (var @event in events)
@@ -78,14 +80,20 @@ namespace Tacta.EventSourcing.Projections
                         catch (Exception ex)
                         {
                             Console.WriteLine(
-                                $"Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}");
+                                $"ProjectionAgent: Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}");
                             break;
                         }
                     }
                 }
-
             }
-            _dispatchInProgress = false;
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ProjectionAgent: An exception occured: {ex.Message}");
+            }
+            finally
+            {
+                _dispatchInProgress = false;
+            }
         }
     }
 }

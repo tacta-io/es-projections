@@ -8,6 +8,7 @@ namespace Tacta.EventSourcing.Projections
         Task HandleEvent(IDomainEvent @event);
 
         // Offset should return projection current offset
+        // eg. double dispatch to projection state repository GetOffset and store it in memory
         Task<int> Offset();
     }
 }
