@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28307.271
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tacta.EventSourcing.Projections", "Tacta.EventSourcing.Projections\Tacta.EventSourcing.Projections.csproj", "{FFAAE48D-501B-45DA-8670-D96BDF2677C6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tacta.EventSourcing.Projections", "Tacta.EventSourcing.Projections\Tacta.EventSourcing.Projections.csproj", "{C05A6191-4039-4451-B299-8F193D21310F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tacta.EventSourcing.Projections.Tests", "Tacta.EventSourcing.Projections.Tests\Tacta.EventSourcing.Projections.Tests.csproj", "{C18CBCAC-5E32-4E06-AAB4-4D746A3A9DBA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +13,14 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{FFAAE48D-501B-45DA-8670-D96BDF2677C6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{FFAAE48D-501B-45DA-8670-D96BDF2677C6}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{FFAAE48D-501B-45DA-8670-D96BDF2677C6}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{FFAAE48D-501B-45DA-8670-D96BDF2677C6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C05A6191-4039-4451-B299-8F193D21310F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C05A6191-4039-4451-B299-8F193D21310F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C05A6191-4039-4451-B299-8F193D21310F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C05A6191-4039-4451-B299-8F193D21310F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C18CBCAC-5E32-4E06-AAB4-4D746A3A9DBA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C18CBCAC-5E32-4E06-AAB4-4D746A3A9DBA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C18CBCAC-5E32-4E06-AAB4-4D746A3A9DBA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C18CBCAC-5E32-4E06-AAB4-4D746A3A9DBA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
