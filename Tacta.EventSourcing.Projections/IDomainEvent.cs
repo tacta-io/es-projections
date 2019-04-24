@@ -2,6 +2,6 @@
 {
     public interface IDomainEvent
     {
-        int Sequence { get; }
+        int Sequence { get; set; }
     }
 }

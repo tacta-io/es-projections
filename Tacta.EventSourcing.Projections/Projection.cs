@@ -29,12 +29,14 @@ namespace Tacta.EventSourcing.Projections
             _currentOffset = @event.Sequence;
         }
 
-        public async Task<int> Offset()
+        public virtual async Task<int> Offset()
         {
             if (_currentOffset == 0)
                 _currentOffset = await _projectionStateRepository.GetOffset();
 
             return _currentOffset;
         }
+
+        public void ResetOffset() => _currentOffset = 0;
     }
 }

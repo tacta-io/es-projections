@@ -238,5 +238,9 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             eventStream.Received().Load(10, 50);
         }
+
+        // Test if projection throws, other projections are built
+        // Test other exceptions - assert building continues
+        // Test ResetOffset - 
     }
 }

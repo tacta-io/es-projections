@@ -1,5 +1,4 @@
 ﻿using System.Threading.Tasks;
-using NSubstitute.Core;
 
 namespace Tacta.EventSourcing.Projections.Tests.Fakes
 {

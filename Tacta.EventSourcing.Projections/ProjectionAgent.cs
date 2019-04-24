@@ -54,7 +54,7 @@ namespace Tacta.EventSourcing.Projections
 
             try
             {
-                _dispatchInProgress = true;
+                ToggleDispatchProgress();
 
                 IReadOnlyCollection<IDomainEvent> events = new List<IDomainEvent>();
 
@@ -64,7 +64,7 @@ namespace Tacta.EventSourcing.Projections
 
                     if (events.Count == 0 || (events.Count > 0 && offset >= (events.First().Sequence + events.Count)))
                     {
-                        var from = offset + 1;
+                        var @from = offset + 1;
 
                         events = _eventStream.Load(@from, _configuration.BatchSize)
                                      .GetAwaiter()
@@ -92,8 +92,10 @@ namespace Tacta.EventSourcing.Projections
             }
             finally
             {
-                _dispatchInProgress = false;
+                ToggleDispatchProgress();
             }
         }
+
+        private void ToggleDispatchProgress() => _dispatchInProgress = !_dispatchInProgress;
     }
 }

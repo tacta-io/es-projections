@@ -2,7 +2,7 @@
 {
     public class FooEvent : IDomainEvent
     {
-        public int Sequence { get; }
+        public int Sequence { get; set; }
 
         public FooEvent(int sequence)
         {
