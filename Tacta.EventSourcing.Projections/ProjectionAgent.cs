@@ -36,7 +36,11 @@ namespace Tacta.EventSourcing.Projections
         public IDisposable Run(Action<Configuration> config)
         {
             config.Invoke(_configuration);
+            return Run();
+        }
 
+        public IDisposable Run()
+        {
             var timer = new Timer();
 
             timer.Elapsed += OnTimer;
