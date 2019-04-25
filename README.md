@@ -73,7 +73,7 @@ This is neccessary in order to track last processed domain event for each projec
 You could implement `IProjectionStateRepository` in a separate class if you want, but it's more convenient for the projection repository to implement it itself.
 
 ### Rebuilding from scratch
-Because your projection tracks its offset, it inherently decides on when to rebuild itself from scratch. `Projection` base class makes this as simple as calling `ResetOffset()` from your projection which will set that offset to 0.
+Because your projection tracks its offset, it inherently decides on when to rebuild itself from scratch. `Projection` base class makes this as simple as deleting entries from the projection table and calling `ResetOffset()` from your projection. This will cause the projection to rehydrate it's offset from the database.
 
 ### 3. Set up your event stream
 One last thing you need to do (but not least), is to set up your event stream.
@@ -89,6 +89,8 @@ This is done by implementing `IEventStream` interface which you will probably wa
  }
 ```
 This method should return `count` number of events starting from `fromOffset` sequence (inclusive)
+
+You want this method to be as optimized as possible.
 
 ### 4. Run `ProjectionAgent`
 Now all we need to do is to start the `ProjectionAgent` by providing it with our `IProjection` and `IEventStream` implementations.

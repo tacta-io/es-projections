@@ -241,6 +241,7 @@ namespace Tacta.EventSourcing.Projections.Tests
 
         // Test if projection throws, other projections are built
         // Test other exceptions - assert building continues
-        // Test ResetOffset - 
+        // Test ResetOffset
+
     }
 }

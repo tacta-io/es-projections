@@ -10,6 +10,7 @@
     <Description>Provides a simple way of incrementally building / rebuilding read model projections for .NET projects</Description>
     <PackageIconUrl>https://tacta.io//wp-content/uploads/2018/10/tacta_logo_neg.png</PackageIconUrl>
     <PackageId>ESProjections</PackageId>
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
 </Project>
