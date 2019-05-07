@@ -74,7 +74,7 @@ namespace Tacta.EventSourcing.Projections
             return _projectionLock.IsActiveProjection(_activeIdentity).GetAwaiter().GetResult();
         }
 
-        private void OnTimer(object source, ElapsedEventArgs e)
+        public void OnTimer(object source, ElapsedEventArgs e)
         {
             if (_dispatchInProgress)
             {
