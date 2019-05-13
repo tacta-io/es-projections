@@ -1,8 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
   <metadata>
-    <id>ESProjections</id>
-    <version>1.0.2</version>
+    <id>TactaESProjections</id>
+    <version>1.0.4</version>
     <authors>Tacta.EventSourcing.Projections</authors>
     <owners>Tacta.EventSourcing.Projections</owners>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
