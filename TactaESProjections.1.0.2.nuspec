@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>TactaESProjections</id>
+    <version>1.0.4</version>
+    <authors>Tacta.EventSourcing.Projections</authors>
+    <owners>Tacta.EventSourcing.Projections</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <licenseUrl>https://github.com/tacta-io/es-projections/blob/master/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/tacta-io/es-projections</projectUrl>
+    <iconUrl>https://tacta.io//wp-content/uploads/2018/10/tacta_logo_neg.png</iconUrl>
+    <description>Provides a simple way of incrementally building / rebuilding read model projections for .NET projects</description>
+    <repository type="git" url="https://github.com/tacta-io/es-projections" />
+    <dependencies>
+      <group targetFramework=".NETStandard2.0" />
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="C:\projects\es-projections\Tacta.EventSourcing.Projections\bin\Debug\netstandard2.0\Tacta.EventSourcing.Projections.dll" target="lib\netstandard2.0\Tacta.EventSourcing.Projections.dll" />
+  </files>
+</package>

@@ -242,6 +242,40 @@ namespace Tacta.EventSourcing.Projections.Tests
         // Test if projection throws, other projections are built
         // Test other exceptions - assert building continues
         // Test ResetOffset
+        [TestMethod]
+        public void TestProjectionAgentWithProjectionLockCallsIProjectionHandle()
+        {
+            var eventStream = Substitute.For<IEventStream>();
 
+            eventStream.Load(1, 50).Returns(new List<IDomainEvent>()
+            {
+                new FooEvent(1),
+            });
+
+            var projectionLock = Substitute.For<IProjectionLock>();
+                projectionLock.IsActiveProjection(Arg.Any<string>()).Returns(true);
+
+            var activeIdentity = "identity";
+
+            var projection = Substitute.For<IProjection>();
+           
+
+            var projectionAgent = new ProjectionAgent(eventStream,
+                new[] { projection }, 
+                projectionLock,
+                activeIdentity);
+
+            var disposable = projectionAgent.Run(config =>
+            {
+                config.BatchSize = 50;
+                config.PeekIntervalMilliseconds = 1;
+            });
+
+            Thread.Sleep(100);
+
+            disposable.Dispose();
+
+            projection.Received().HandleEvent(Arg.Any<IDomainEvent>());
+        }
     }
 }

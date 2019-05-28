@@ -13,6 +13,7 @@ namespace Tacta.EventSourcing.Projections
             public int BatchSize { get; set; } = 100;
 
             public double PeekIntervalMilliseconds { get; set; } = 1000;
+ 
         }
 
         private readonly Configuration _configuration = new Configuration();
@@ -24,13 +25,29 @@ namespace Tacta.EventSourcing.Projections
         private readonly List<IProjection> _projections;
 
         private bool _dispatchInProgress;
+        private readonly IProjectionLock _projectionLock;
+        private readonly string _activeIdentity;
 
-        public ProjectionAgent(IEventStream eventStream, IProjection[] projections)
+        public ProjectionAgent(IEventStream eventStream,
+            IProjection[] projections,
+            IProjectionLock projectionLock = null, 
+            string activeIdentity = null)
         {
             _eventStream = eventStream ?? throw new InvalidEnumArgumentException("ProjectionAgent: You have to provide an event stream");
             _projections = projections.ToList();
-
+            
             if (_projections == null) Console.WriteLine("ProjectionAgent: No projections registered");
+
+            if (IsUsingLocking(projectionLock, activeIdentity))
+            {
+                _projectionLock = projectionLock;
+                _activeIdentity = activeIdentity;
+            }
+        }
+
+        private static bool IsUsingLocking(IProjectionLock projectionLock, string activeIdentity)
+        {
+            return projectionLock != null && activeIdentity != null;
         }
 
         public IDisposable Run(Action<Configuration> config)
@@ -52,10 +69,40 @@ namespace Tacta.EventSourcing.Projections
             return _timer;
         }
 
+        private bool IsProjectionActive()
+        {
+            return _projectionLock.IsActiveProjection(_activeIdentity).GetAwaiter().GetResult();
+        }
+
         public void OnTimer(object source, ElapsedEventArgs e)
         {
-            if (_dispatchInProgress) return;
+            if (_dispatchInProgress)
+            {
+                //refresh timer if rebuild lasts longer
+                IsProjectionActive();
+                return;
+            }
 
+            if (IsUsingLocking(_projectionLock, _activeIdentity))
+            {
+                if (IsProjectionActive())
+                {
+                    ProjectEvents();
+                    Console.WriteLine($"Process {_activeIdentity} is now projecting");
+                }
+                else
+                {
+                    Console.WriteLine($"Process {_activeIdentity} is not active");
+                }
+            }
+            else
+            {
+                ProjectEvents();
+            }
+        }
+
+        private void ProjectEvents()
+        {
             try
             {
                 ToggleDispatchProgress();
