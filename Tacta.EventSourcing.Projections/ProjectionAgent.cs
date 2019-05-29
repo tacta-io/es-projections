@@ -28,6 +28,9 @@ namespace Tacta.EventSourcing.Projections
         private readonly IProjectionLock _projectionLock;
         private readonly string _activeIdentity;
 
+        public static volatile bool IsActiveProjection = false;
+        public static volatile bool HasChangedToActive = false;
+
         public ProjectionAgent(IEventStream eventStream,
             IProjection[] projections,
             IProjectionLock projectionLock = null, 
@@ -71,7 +74,29 @@ namespace Tacta.EventSourcing.Projections
 
         private bool IsProjectionActive()
         {
-            return _projectionLock.IsActiveProjection(_activeIdentity).GetAwaiter().GetResult();
+            var isActive = _projectionLock.IsActiveProjection(_activeIdentity).GetAwaiter().GetResult();
+            if (IsActiveProjection && isActive)
+            {
+                HasChangedToActive = false;
+                
+            }
+            else if (IsActiveProjection && !isActive)
+            {
+                IsActiveProjection = false;
+                HasChangedToActive = false;
+            }
+            else if (!IsActiveProjection && isActive)
+            {
+                IsActiveProjection = true;
+                HasChangedToActive = true;
+            }
+            else
+            {
+                IsActiveProjection = false;
+                HasChangedToActive = false;
+            }
+
+            return IsActiveProjection;
         }
 
         public void OnTimer(object source, ElapsedEventArgs e)
