@@ -31,7 +31,7 @@ namespace Tacta.EventSourcing.Projections
 
         public virtual async Task<int> Offset()
         {
-            if (_currentOffset == 0)
+            if (_currentOffset == 0 || ProjectionAgent.HasChangedToActive)
                 _currentOffset = await _projectionStateRepository.GetOffset();
 
             return _currentOffset;
