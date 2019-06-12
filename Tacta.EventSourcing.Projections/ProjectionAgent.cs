@@ -142,22 +142,26 @@ namespace Tacta.EventSourcing.Projections
                     {
                         var @from = offset + 1;
 
-                        events = _eventStream.Load(@from, _configuration.BatchSize)
-                                     .GetAwaiter()
-                                     .GetResult() ?? new List<IDomainEvent>();
+                        events = LoadEvents(@from);
                     }
 
-                    foreach (var @event in events)
+                    HandleEvents(events, projection);
+
+                    var newOffset = projection.Offset().GetAwaiter().GetResult();
+
+                    if (newOffset == offset)
                     {
-                        try
+                        var @from = _configuration.BatchSize;
+
+                        events = LoadEvents(@from);
+
+                        while (newOffset == offset && events.Count != 0)
                         {
-                            projection.HandleEvent(@event).GetAwaiter().GetResult();
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine(
-                                $"ProjectionAgent: Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}");
-                            break;
+                            HandleEvents(events, projection);
+
+                            @from += _configuration.BatchSize;
+
+                            events = LoadEvents(@from);
                         }
                     }
                 }
@@ -169,6 +173,30 @@ namespace Tacta.EventSourcing.Projections
             finally
             {
                 ToggleDispatchProgress();
+            }
+        }
+
+        private IReadOnlyCollection<IDomainEvent> LoadEvents(int @from)
+        {
+            return _eventStream.Load(@from, _configuration.BatchSize)
+                         .GetAwaiter()
+                         .GetResult() ?? new List<IDomainEvent>();
+        }
+
+        private static void HandleEvents(IEnumerable<IDomainEvent> events, IProjection projection)
+        {
+            foreach (var @event in events)
+            {
+                try
+                {
+                    projection.HandleEvent(@event).GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(
+                        $"ProjectionAgent: Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}");
+                    break;
+                }
             }
         }
 
