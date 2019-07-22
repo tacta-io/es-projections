@@ -149,15 +149,6 @@ namespace Tacta.EventSourcing.Projections.Tests
         {
             var eventStream = Substitute.For<IEventStream>();
 
-            eventStream.Load(1, 50).Returns(new List<IDomainEvent>()
-            {
-                new FooEvent(1),
-                new FooEvent(2),
-                new FooEvent(3),
-                new FooEvent(4),
-                new FooEvent(5),
-            });
-
             eventStream.Load(6, 50).Returns(new List<IDomainEvent>()
             {
                 new FooEvent(7),
@@ -187,8 +178,7 @@ namespace Tacta.EventSourcing.Projections.Tests
             Thread.Sleep(100);
 
             disposable.Dispose();
-
-            eventStream.Received(1).Load(1, 50);
+            
             eventStream.Received(1).Load(6, 50);
         }
 
