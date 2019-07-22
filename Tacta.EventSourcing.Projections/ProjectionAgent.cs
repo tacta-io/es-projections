@@ -132,20 +132,16 @@ namespace Tacta.EventSourcing.Projections
             {
                 ToggleDispatchProgress();
 
-                IReadOnlyCollection<IDomainEvent> events = new List<IDomainEvent>();
-
-                foreach (var projection in _projections.OrderByDescending(p => p.Offset().GetAwaiter().GetResult()))
+                foreach (var projection in _projections.OrderBy(p => p.Offset().GetAwaiter().GetResult()))
                 {
                     var offset = projection.Offset().GetAwaiter().GetResult();
+                   
+                    var @from = offset + 1;
 
-                    if (events.Count == 0 || (events.Count > 0 && offset >= (events.First().Sequence + events.Count)))
-                    {
-                        var @from = offset + 1;
-
-                        events = _eventStream.Load(@from, _configuration.BatchSize)
+                    var events = _eventStream
+                                     .Load(@from, _configuration.BatchSize, projection.Subscriptions())
                                      .GetAwaiter()
                                      .GetResult() ?? new List<IDomainEvent>();
-                    }
 
                     foreach (var @event in events)
                     {

@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Tacta.EventSourcing.Projections
 {
@@ -10,5 +11,8 @@ namespace Tacta.EventSourcing.Projections
         // Offset should return projection current offset
         // eg. double dispatch to projection state repository GetOffset and store it in memory
         Task<int> Offset();
+
+        // Should return list of names of events relevant to the projection
+        List<string> Subscriptions();
     }
 }

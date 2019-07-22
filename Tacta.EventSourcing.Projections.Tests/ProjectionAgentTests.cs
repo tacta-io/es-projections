@@ -1,6 +1,7 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NSubstitute;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Tacta.EventSourcing.Projections.Tests.Fakes;
 
@@ -14,12 +15,18 @@ namespace Tacta.EventSourcing.Projections.Tests
         {
             var eventStream = Substitute.For<IEventStream>();
 
-            eventStream.Load(1, 50).Returns(new List<IDomainEvent>()
+            var subscriptions = new List<string> { typeof(FooEvent).Name };
+
+            eventStream
+                .Load(1, 50, subscriptions)
+                .Returns(new List<IDomainEvent>
             {
                 new FooEvent(1),
             });
 
             var projection = Substitute.For<IProjection>();
+
+            projection.Subscriptions().Returns(subscriptions);
 
             var projectionAgent = new ProjectionAgent(eventStream, new[] { projection });
 
@@ -41,7 +48,11 @@ namespace Tacta.EventSourcing.Projections.Tests
         {
             var eventStream = Substitute.For<IEventStream>();
 
-            eventStream.Load(1, 50).Returns(new List<IDomainEvent>()
+            var subscriptions = new List<string> { typeof(FooEvent).Name };
+
+            eventStream
+                .Load(1, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)))
+                .Returns(new List<IDomainEvent>
             {
                 new FooEvent(1),
                 new FooEvent(1),
@@ -76,7 +87,11 @@ namespace Tacta.EventSourcing.Projections.Tests
         {
             var eventStream = Substitute.For<IEventStream>();
 
-            eventStream.Load(1, 50).Returns(new List<IDomainEvent>()
+            var subscriptions = new List<string> { typeof(FooEvent).Name };
+
+            eventStream
+                .Load(1, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)))
+                .Returns(new List<IDomainEvent>
             {
                 new FooEvent(1),
                 new FooEvent(2),
@@ -109,11 +124,14 @@ namespace Tacta.EventSourcing.Projections.Tests
         }
 
         [TestMethod]
-        public void TestProjectionAgentReusesEventList()
+        public void TestProjectionAgentDoesNotReuseEventList()
         {
             var eventStream = Substitute.For<IEventStream>();
 
-            eventStream.Load(1, 50).Returns(new List<IDomainEvent>()
+            var subscriptions = new List<string> { typeof(FooEvent).Name };
+
+            eventStream.Load(1, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)))
+                .Returns(new List<IDomainEvent>()
             {
                 new FooEvent(1),
                 new FooEvent(2),
@@ -141,19 +159,34 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             disposable.Dispose();
 
-            eventStream.Received(1).Load(1, 50);
+            eventStream.Received(2).Load(1, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)));
         }
 
         [TestMethod]
-        public void TestProjectionAgentQueriesEventStreamPerProjectionIfNeeded()
+        public void TestProjectionAgentQueriesEventStreamPerProjection()
         {
             var eventStream = Substitute.For<IEventStream>();
 
-            eventStream.Load(6, 50).Returns(new List<IDomainEvent>()
+            var subscriptions = new List<string> { typeof(FooEvent).Name };
+
+            eventStream
+                .Load(1, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)))
+                .Returns(new List<IDomainEvent>()	
+            {	
+                new FooEvent(1),	
+                new FooEvent(2),	
+                new FooEvent(3),	
+                new FooEvent(4),	
+                new FooEvent(5),	
+            });
+
+            eventStream
+                .Load(15, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)))
+                .Returns(new List<IDomainEvent>()
             {
-                new FooEvent(7),
-                new FooEvent(8),
-                new FooEvent(9),
+                new FooEvent(15),
+                new FooEvent(16),
+                new FooEvent(17),
             });
 
             var projectionState1 = Substitute.For<IProjectionStateRepository>();
@@ -162,7 +195,7 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             var projectionState2 = Substitute.For<IProjectionStateRepository>();
 
-            projectionState2.GetOffset().Returns(5);
+            projectionState2.GetOffset().Returns(14);
 
             var projection1 = new FooProjection(projectionState1);
             var projection2 = new FooProjection(projectionState2);
@@ -175,11 +208,12 @@ namespace Tacta.EventSourcing.Projections.Tests
                 config.PeekIntervalMilliseconds = 1;
             });
 
-            Thread.Sleep(100);
+           Thread.Sleep(100);
 
             disposable.Dispose();
-            
-            eventStream.Received(1).Load(6, 50);
+
+            eventStream.Received(1).Load(1, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)));
+            eventStream.Received(1).Load(15, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)));
         }
 
         [TestMethod]
@@ -187,7 +221,11 @@ namespace Tacta.EventSourcing.Projections.Tests
         {
             var eventStream = Substitute.For<IEventStream>();
 
-            eventStream.Load(1, 50).Returns(new List<IDomainEvent>()
+            var subscriptions = new List<string> { typeof(FooEvent).Name };
+
+            eventStream
+                .Load(1, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)))
+                .Returns(new List<IDomainEvent>()
             {
                 new FooEvent(1),
                 new FooEvent(2),
@@ -196,7 +234,9 @@ namespace Tacta.EventSourcing.Projections.Tests
                 new FooEvent(5),
             });
 
-            eventStream.Load(6, 50).Returns(new List<IDomainEvent>()
+            eventStream
+                .Load(6, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)))
+                .Returns(new List<IDomainEvent>()
             {
                 new FooEvent(7),
                 new FooEvent(8),
@@ -226,7 +266,7 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             disposable.Dispose();
 
-            eventStream.Received().Load(10, 50);
+            eventStream.Received().Load(10, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)));
         }
 
         // Test if projection throws, other projections are built
@@ -237,7 +277,11 @@ namespace Tacta.EventSourcing.Projections.Tests
         {
             var eventStream = Substitute.For<IEventStream>();
 
-            eventStream.Load(1, 50).Returns(new List<IDomainEvent>()
+            var subscriptions = new List<string> { typeof(FooEvent).Name };
+
+            eventStream
+                .Load(1, 50, subscriptions)
+                .Returns(new List<IDomainEvent>()
             {
                 new FooEvent(1),
             });
@@ -245,10 +289,11 @@ namespace Tacta.EventSourcing.Projections.Tests
             var projectionLock = Substitute.For<IProjectionLock>();
                 projectionLock.IsActiveProjection(Arg.Any<string>()).Returns(true);
 
-            var activeIdentity = "identity";
+            const string activeIdentity = "identity";
 
             var projection = Substitute.For<IProjection>();
-           
+
+            projection.Subscriptions().Returns(subscriptions);
 
             var projectionAgent = new ProjectionAgent(eventStream,
                 new[] { projection }, 
