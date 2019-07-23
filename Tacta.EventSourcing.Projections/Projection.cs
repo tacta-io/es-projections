@@ -41,9 +41,11 @@ namespace Tacta.EventSourcing.Projections
 
         public virtual List<string> Subscriptions()
         {
-            return (from method in GetType().GetMethods() 
-                    where method.Name == "Handle" 
-                    select method.GetParameters().Select(p => p.ParameterType.Name).First()).ToList();
+            return GetType()
+                .GetInterfaces()
+                .Where(x => x.Name.Contains(typeof(IHandleEvent<>).Name))
+                .Select(x => x.GenericTypeArguments?.FirstOrDefault()?.Name)
+                .ToList();
         }
 
         public void ResetOffset() => _currentOffset = 0;

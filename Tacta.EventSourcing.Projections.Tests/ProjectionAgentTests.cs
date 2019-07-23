@@ -312,5 +312,114 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             projection.Received().HandleEvent(Arg.Any<IDomainEvent>());
         }
+
+        [TestMethod]
+        public void TestProjectionAgentQueriesEventStreamByCorrespondingSubscriptions()
+        {
+            var eventStream = Substitute.For<IEventStream>();
+
+            var subscriptions1 = new List<string> { typeof(FooEvent).Name };
+
+            var subscriptions2 = new List<string> { typeof(BooEvent).Name, typeof(FooEvent).Name };
+
+            var projectionState1 = Substitute.For<IProjectionStateRepository>();
+
+            projectionState1.GetOffset().Returns(0);
+
+            var projectionState2 = Substitute.For<IProjectionStateRepository>();
+
+            projectionState2.GetOffset().Returns(20);
+
+            var projection1 = new FooProjection(projectionState1);
+            var projection2 = new BooProjection(projectionState2);
+
+            var projectionAgent = new ProjectionAgent(eventStream, new IProjection[] { projection1, projection2 });
+
+            var disposable = projectionAgent.Run(config =>
+            {
+                config.BatchSize = 50;
+                config.PeekIntervalMilliseconds = 1;
+            });
+
+            Thread.Sleep(100);
+
+            disposable.Dispose();
+
+            eventStream.Received().Load(1, 50, Arg.Is<List<string>>(x => subscriptions1.SequenceEqual(x)));
+            eventStream.Received().Load(21, 50, Arg.Is<List<string>>(x => subscriptions2.SequenceEqual(x)));
+        }
+
+        
+        [TestMethod]
+        public void TestProjectionAgentQueriesEventStreamByCorrespondingProjectionOffset()
+        {
+            var eventStream = Substitute.For<IEventStream>();
+
+            var subscriptions1 = new List<string> { typeof(FooEvent).Name };
+
+            var subscriptions2 = new List<string> { typeof(BooEvent).Name, typeof(FooEvent).Name };
+
+            eventStream
+                .Load(1, 3, Arg.Is<List<string>>(x => subscriptions1.SequenceEqual(x)))
+                .Returns(new List<IDomainEvent>
+                {
+                    new FooEvent(1), 
+                    new FooEvent(2), 
+                    new FooEvent(3)
+                });
+
+            eventStream
+                .Load(21, 3, Arg.Is<List<string>>(x => subscriptions2.SequenceEqual(x)))
+                .Returns(new List<IDomainEvent>
+                {
+                    new BooEvent(21),
+                    new BooEvent(22),
+                    new BooEvent(23)
+                });
+
+            var projectionState1 = Substitute.For<IProjectionStateRepository>();
+
+            projectionState1.GetOffset().Returns(0);
+
+            var projectionState2 = Substitute.For<IProjectionStateRepository>();
+
+            projectionState2.GetOffset().Returns(20);
+
+            var projection1 = new FooProjection(projectionState1);
+            var projection2 = new BooProjection(projectionState2);
+
+            var projectionAgent = new ProjectionAgent(eventStream, new IProjection[] { projection1, projection2 });
+
+            var disposable = projectionAgent.Run(config =>
+            {
+                config.BatchSize = 3;
+                config.PeekIntervalMilliseconds = 1;
+            });
+
+            Thread.Sleep(100);
+
+            disposable.Dispose();
+
+            eventStream.Received().Load(1, 3, Arg.Is<List<string>>(x => subscriptions1.SequenceEqual(x)));
+            eventStream.Received().Load(21, 3, Arg.Is<List<string>>(x => subscriptions2.SequenceEqual(x)));
+            eventStream.Received().Load(4, 3, Arg.Is<List<string>>(x => subscriptions1.SequenceEqual(x)));
+            eventStream.Received().Load(24, 3, Arg.Is<List<string>>(x => subscriptions2.SequenceEqual(x)));
+        }
+
+        [TestMethod]
+        public void TestSubscriptionsMethodReturnsCorrespondingListOfEvents()
+        {
+            var subscriptions1 = new List<string> { typeof(BooEvent).Name, typeof(FooEvent).Name };
+            var subscriptions2 = new List<string>();
+
+            var projectionState1 = Substitute.For<IProjectionStateRepository>();
+            var projectionState2 = Substitute.For<IProjectionStateRepository>();
+
+            var projection1 = new BooProjection(projectionState1);
+            var projection2 = new MooProjection(projectionState2);
+
+            Assert.AreEqual(projection1.Subscriptions().SequenceEqual(subscriptions1), true);
+            Assert.AreEqual(projection2.Subscriptions().SequenceEqual(subscriptions2), true);
+        }
     }
 }
