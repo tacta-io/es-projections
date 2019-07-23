@@ -1,4 +1,6 @@
 # ESProjections
+[![Build status](https://ci.appveyor.com/api/projects/status/na7m802ry0b1v4a7?svg=true)](https://ci.appveyor.com/project/aneshas/es-projections)
+
 Provides a simple way of incrementally building / rebuilding read model projections for .NET projects
 
 `Install-Package ESProjections [-Version x.x.x]`
