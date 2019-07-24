@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Tacta.EventSourcing.Projections
@@ -35,6 +37,15 @@ namespace Tacta.EventSourcing.Projections
                 _currentOffset = await _projectionStateRepository.GetOffset();
 
             return _currentOffset;
+        }
+
+        public virtual List<string> Subscriptions()
+        {
+            return GetType()
+                .GetInterfaces()
+                .Where(x => x.Name.Contains(typeof(IHandleEvent<>).Name))
+                .Select(x => x.GenericTypeArguments?.FirstOrDefault()?.Name)
+                .ToList();
         }
 
         public void ResetOffset() => _currentOffset = 0;
