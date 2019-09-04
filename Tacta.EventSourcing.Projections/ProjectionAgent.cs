@@ -13,7 +13,13 @@ namespace Tacta.EventSourcing.Projections
             public int BatchSize { get; set; } = 100;
 
             public double PeekIntervalMilliseconds { get; set; } = 1000;
- 
+
+            public IHandleException ExceptionHandler { get; private set; }
+
+            public void AddExceptionHandler(IHandleException handler)
+            {
+                ExceptionHandler = handler;
+            }
         }
 
         private readonly Configuration _configuration = new Configuration();
@@ -151,8 +157,23 @@ namespace Tacta.EventSourcing.Projections
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine(
-                                $"ProjectionAgent: Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}");
+                            var exMessage =
+                                $"ProjectionAgent: Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}";
+
+                            try
+                            {
+                                var exception = new AggregateException(new[]
+                                {
+                                    new Exception(exMessage), 
+                                    ex
+                                });
+
+                                _configuration.ExceptionHandler?.Handle(exception);
+                            }
+                            finally
+                            {
+                                Console.WriteLine(exMessage);
+                            }
                             break;
                         }
                     }

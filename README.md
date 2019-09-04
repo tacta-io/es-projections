@@ -121,6 +121,9 @@ Somwhere in your `Startup` or `Program` classes:
 
       // Interval at which to query the IEventStream
       config.PeekIntervalMilliseconds = 500;
+
+      // Custom exception handler you can use for reporting
+      config.AddExceptionHandler(exHandler);
   });
 
   // OR with default config: _disposable = projectionAgent.Run();
