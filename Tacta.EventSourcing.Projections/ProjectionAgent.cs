@@ -157,14 +157,22 @@ namespace Tacta.EventSourcing.Projections
                         }
                         catch (Exception ex)
                         {
+                            var exMessage =
+                                $"ProjectionAgent: Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}";
+
                             try
                             {
-                                _configuration.ExceptionHandler?.Handle(ex);
+                                var exception = new AggregateException(new[]
+                                {
+                                    new Exception(exMessage), 
+                                    ex
+                                });
+
+                                _configuration.ExceptionHandler?.Handle(exception);
                             }
                             finally
                             {
-                                Console.WriteLine(
-                                    $"ProjectionAgent: Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}");
+                                Console.WriteLine(exMessage);
                             }
                             break;
                         }
