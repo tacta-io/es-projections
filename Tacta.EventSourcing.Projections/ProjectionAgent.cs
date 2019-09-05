@@ -114,6 +114,8 @@ namespace Tacta.EventSourcing.Projections
                 return;
             }
 
+            ToggleDispatchProgress();
+
             if (IsUsingLocking(_projectionLock, _activeIdentity))
             {
                 if (IsProjectionActive())
@@ -136,8 +138,6 @@ namespace Tacta.EventSourcing.Projections
         {
             try
             {
-                ToggleDispatchProgress();
-
                 foreach (var projection in _projections.OrderBy(p => p.Offset().GetAwaiter().GetResult()))
                 {
                     var offset = projection.Offset().GetAwaiter().GetResult();
