@@ -109,8 +109,9 @@ namespace Tacta.EventSourcing.Projections
         {
             if (_dispatchInProgress)
             {
-                //refresh timer if rebuild lasts longer
-                IsProjectionActive();
+                // refresh timer if rebuild lasts longer
+                // we need this to activate inactive agent once active agent is deactivated
+                if (IsProjectionActive()) ToggleDispatchProgress();
                 return;
             }
 
