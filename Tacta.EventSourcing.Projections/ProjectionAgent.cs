@@ -39,12 +39,12 @@ namespace Tacta.EventSourcing.Projections
 
         public ProjectionAgent(IEventStream eventStream,
             IProjection[] projections,
-            IProjectionLock projectionLock = null, 
+            IProjectionLock projectionLock = null,
             string activeIdentity = null)
         {
             _eventStream = eventStream ?? throw new InvalidEnumArgumentException("ProjectionAgent: You have to provide an event stream");
             _projections = projections.ToList();
-            
+
             if (_projections == null) Console.WriteLine("ProjectionAgent: No projections registered");
 
             if (IsUsingLocking(projectionLock, activeIdentity))
@@ -84,7 +84,7 @@ namespace Tacta.EventSourcing.Projections
             if (IsActiveProjection && isActive)
             {
                 HasChangedToActive = false;
-                
+
             }
             else if (IsActiveProjection && !isActive)
             {
@@ -107,77 +107,32 @@ namespace Tacta.EventSourcing.Projections
 
         public void OnTimer(object source, ElapsedEventArgs e)
         {
-            if (_dispatchInProgress)
+            try
             {
-                // refresh timer if rebuild lasts longer
-                // we need this to activate inactive agent once active agent is deactivated
-                if (IsProjectionActive()) ToggleDispatchProgress();
-                return;
-            }
-
-            ToggleDispatchProgress();
-
-            if (IsUsingLocking(_projectionLock, _activeIdentity))
-            {
-                if (IsProjectionActive())
+                if (_dispatchInProgress)
                 {
-                    ProjectEvents();
-                    Console.WriteLine($"Process {_activeIdentity} is now projecting");
+                    // refresh timer if rebuild lasts longer
+                    IsProjectionActive();
+                    return;
+                }
+
+                ToggleDispatchProgress();
+
+                if (IsUsingLocking(_projectionLock, _activeIdentity))
+                {
+                    if (IsProjectionActive())
+                    {
+                        ProjectEvents();
+                        Console.WriteLine($"Process {_activeIdentity} is now projecting");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Process {_activeIdentity} is not active");
+                    }
                 }
                 else
                 {
-                    Console.WriteLine($"Process {_activeIdentity} is not active");
-                }
-            }
-            else
-            {
-                ProjectEvents();
-            }
-        }
-
-        private void ProjectEvents()
-        {
-            try
-            {
-                foreach (var projection in _projections.OrderBy(p => p.Offset().GetAwaiter().GetResult()))
-                {
-                    var offset = projection.Offset().GetAwaiter().GetResult();
-                   
-                    var @from = offset + 1;
-
-                    var events = _eventStream
-                                     .Load(@from, _configuration.BatchSize, projection.Subscriptions())
-                                     .GetAwaiter()
-                                     .GetResult() ?? new List<IDomainEvent>();
-
-                    foreach (var @event in events)
-                    {
-                        try
-                        {
-                            projection.HandleEvent(@event).GetAwaiter().GetResult();
-                        }
-                        catch (Exception ex)
-                        {
-                            var exMessage =
-                                $"ProjectionAgent: Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}";
-
-                            try
-                            {
-                                var exception = new AggregateException(new[]
-                                {
-                                    new Exception(exMessage), 
-                                    ex
-                                });
-
-                                _configuration.ExceptionHandler?.Handle(exception);
-                            }
-                            finally
-                            {
-                                Console.WriteLine(exMessage);
-                            }
-                            break;
-                        }
-                    }
+                    ProjectEvents();
                 }
             }
             catch (Exception ex)
@@ -187,6 +142,50 @@ namespace Tacta.EventSourcing.Projections
             finally
             {
                 ToggleDispatchProgress();
+            }
+        }
+
+        private void ProjectEvents()
+        {
+            foreach (var projection in _projections.OrderBy(p => p.Offset().GetAwaiter().GetResult()))
+            {
+                var offset = projection.Offset().GetAwaiter().GetResult();
+
+                var @from = offset + 1;
+
+                var events = _eventStream
+                                 .Load(@from, _configuration.BatchSize, projection.Subscriptions())
+                                 .GetAwaiter()
+                                 .GetResult() ?? new List<IDomainEvent>();
+
+                foreach (var @event in events)
+                {
+                    try
+                    {
+                        projection.HandleEvent(@event).GetAwaiter().GetResult();
+                    }
+                    catch (Exception ex)
+                    {
+                        var exMessage =
+                            $"ProjectionAgent: Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}";
+
+                        try
+                        {
+                            var exception = new AggregateException(new[]
+                            {
+                                    new Exception(exMessage),
+                                    ex
+                                });
+
+                            _configuration.ExceptionHandler?.Handle(exception);
+                        }
+                        finally
+                        {
+                            Console.WriteLine(exMessage);
+                        }
+                        break;
+                    }
+                }
             }
         }
 
