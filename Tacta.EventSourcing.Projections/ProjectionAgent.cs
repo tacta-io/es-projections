@@ -32,14 +32,15 @@ namespace Tacta.EventSourcing.Projections
         private readonly List<IProjection> _projections;
 
         private readonly IProjectionLock _projectionLock;
-        private readonly string _activeIdentity;
 
-        private volatile bool _dispatchInProgress;
+        private readonly string _agentId;
+
+        private volatile bool _buildInProgress;
 
         public ProjectionAgent(IEventStream eventStream,
             IProjection[] projections,
             IProjectionLock projectionLock = null,
-            string activeIdentity = null)
+            string agentId = null)
         {
             _eventStream = eventStream ?? throw new InvalidEnumArgumentException("ProjectionAgent: You have to provide an event stream");
             _projections = projections.ToList();
@@ -47,7 +48,7 @@ namespace Tacta.EventSourcing.Projections
             if (_projections == null) Console.WriteLine("ProjectionAgent: No projections registered");
 
             _projectionLock = projectionLock;
-            _activeIdentity = activeIdentity;
+            _agentId = agentId;
         }
 
         public IDisposable Run(Action<Configuration> config)
@@ -60,7 +61,7 @@ namespace Tacta.EventSourcing.Projections
         {
             var timer = new Timer();
 
-            timer.Elapsed += OnTimer;
+            timer.Elapsed += MainLoop;
             timer.Interval = _configuration.PeekIntervalMilliseconds;
             timer.Enabled = true;
 
@@ -69,28 +70,35 @@ namespace Tacta.EventSourcing.Projections
             return _timer;
         }
 
-        public void OnTimer(object source, ElapsedEventArgs e)
+        public void MainLoop(object source, ElapsedEventArgs e)
         {
-            if (_dispatchInProgress)
+            if (_buildInProgress)
             {
-                // Refresh timer if rebuild lasts longer
-                if(IsUsingLocking()) RefreshActiveTimer();
+                // Keep projection active in case of unexpected delays
+                // while the projection build is in progress.
+                RefreshActiveTimestamp();
                 return;
             }
 
             try
             {
-                _dispatchInProgress = true;
+                _buildInProgress = true;
 
                 if (IsUsingLocking() && !IsProjectionActive())
                 {
-                    Console.WriteLine($"Process {_activeIdentity} is not active");
+                    Console.WriteLine($"Process {_agentId} is not active");
+
+                    // After becoming inactive, reset projection offsets
+                    // to 0, which will cause each projection to re-read 
+                    // the offset from the database.
+                    ResetProjections();
+
                     return;
                 }
 
-                Console.WriteLine($"Process {_activeIdentity} is now projecting");
+                Console.WriteLine($"Process {_agentId} is now active");
 
-                ProjectEvents();
+                BuildProjections();
             }
             catch (Exception ex)
             {
@@ -98,12 +106,14 @@ namespace Tacta.EventSourcing.Projections
             }
             finally
             {
-                _dispatchInProgress = false;
+                _buildInProgress = false;
             }
         }
 
-        private void RefreshActiveTimer()
+        private void RefreshActiveTimestamp()
         {
+            if (!IsUsingLocking()) return;
+
             try
             {
                 IsProjectionActive();
@@ -115,12 +125,20 @@ namespace Tacta.EventSourcing.Projections
         }
 
         private bool IsUsingLocking() =>
-            _projectionLock != null && _activeIdentity != null;
+            _projectionLock != null && !string.IsNullOrEmpty(_agentId);
 
         private bool IsProjectionActive() =>
-            _projectionLock.IsActiveProjection(_activeIdentity).GetAwaiter().GetResult();
+            _projectionLock.IsActiveProjection(_agentId).GetAwaiter().GetResult();
 
-        private void ProjectEvents()
+        private void ResetProjections()
+        {
+            foreach (var projection in _projections)
+            {
+                projection.ResetOffset();
+            }
+        }
+
+        private void BuildProjections()
         {
             foreach (var projection in _projections.OrderBy(p => p.Offset().GetAwaiter().GetResult()))
             {
@@ -161,7 +179,7 @@ namespace Tacta.EventSourcing.Projections
             }
             catch (Exception e)
             {
-                // Log to console if exception handler fails for some reason
+                // Log to console if provided exception handler fails for some reason
                 Console.WriteLine($"ProjectionAgent Exception thrown: {ex}");
                 Console.WriteLine($"Unable to call external exception handler due to {e}");
             }
