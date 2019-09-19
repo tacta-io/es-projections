@@ -14,7 +14,8 @@ namespace Tacta.EventSourcing.Projections
 
             public double PeekIntervalMilliseconds { get; set; } = 1000;
 
-            public IHandleException ExceptionHandler { get; private set; }
+            public IHandleException ExceptionHandler { get; private set; } =
+                new ConsoleExceptionHandler();
 
             public void AddExceptionHandler(IHandleException handler)
             {
@@ -30,12 +31,10 @@ namespace Tacta.EventSourcing.Projections
 
         private readonly List<IProjection> _projections;
 
-        private bool _dispatchInProgress;
         private readonly IProjectionLock _projectionLock;
         private readonly string _activeIdentity;
 
-        public static volatile bool IsActiveProjection = false;
-        public static volatile bool HasChangedToActive = false;
+        private volatile bool _dispatchInProgress;
 
         public ProjectionAgent(IEventStream eventStream,
             IProjection[] projections,
@@ -47,16 +46,8 @@ namespace Tacta.EventSourcing.Projections
 
             if (_projections == null) Console.WriteLine("ProjectionAgent: No projections registered");
 
-            if (IsUsingLocking(projectionLock, activeIdentity))
-            {
-                _projectionLock = projectionLock;
-                _activeIdentity = activeIdentity;
-            }
-        }
-
-        private static bool IsUsingLocking(IProjectionLock projectionLock, string activeIdentity)
-        {
-            return projectionLock != null && activeIdentity != null;
+            _projectionLock = projectionLock;
+            _activeIdentity = activeIdentity;
         }
 
         public IDisposable Run(Action<Configuration> config)
@@ -78,72 +69,56 @@ namespace Tacta.EventSourcing.Projections
             return _timer;
         }
 
-        private bool IsProjectionActive()
-        {
-            var isActive = _projectionLock.IsActiveProjection(_activeIdentity).GetAwaiter().GetResult();
-            if (IsActiveProjection && isActive)
-            {
-                HasChangedToActive = false;
-
-            }
-            else if (IsActiveProjection && !isActive)
-            {
-                IsActiveProjection = false;
-                HasChangedToActive = false;
-            }
-            else if (!IsActiveProjection && isActive)
-            {
-                IsActiveProjection = true;
-                HasChangedToActive = true;
-            }
-            else
-            {
-                IsActiveProjection = false;
-                HasChangedToActive = false;
-            }
-
-            return IsActiveProjection;
-        }
-
         public void OnTimer(object source, ElapsedEventArgs e)
         {
+            if (_dispatchInProgress)
+            {
+                // Refresh timer if rebuild lasts longer
+                if(IsUsingLocking()) RefreshActiveTimer();
+                return;
+            }
+
             try
             {
-                if (_dispatchInProgress)
+                _dispatchInProgress = true;
+
+                if (IsUsingLocking() && !IsProjectionActive())
                 {
-                    // refresh timer if rebuild lasts longer
-                    IsProjectionActive();
+                    Console.WriteLine($"Process {_activeIdentity} is not active");
                     return;
                 }
 
-                ToggleDispatchProgress();
+                Console.WriteLine($"Process {_activeIdentity} is now projecting");
 
-                if (IsUsingLocking(_projectionLock, _activeIdentity))
-                {
-                    if (IsProjectionActive())
-                    {
-                        ProjectEvents();
-                        Console.WriteLine($"Process {_activeIdentity} is now projecting");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Process {_activeIdentity} is not active");
-                    }
-                }
-                else
-                {
-                    ProjectEvents();
-                }
+                ProjectEvents();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"ProjectionAgent: An exception occured: {ex.Message}");
+                HandleException(ex);
             }
             finally
             {
-                ToggleDispatchProgress();
+                _dispatchInProgress = false;
             }
         }
+
+        private void RefreshActiveTimer()
+        {
+            try
+            {
+                IsProjectionActive();
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
+            }
+        }
+
+        private bool IsUsingLocking() =>
+            _projectionLock != null && _activeIdentity != null;
+
+        private bool IsProjectionActive() =>
+            _projectionLock.IsActiveProjection(_activeIdentity).GetAwaiter().GetResult();
 
         private void ProjectEvents()
         {
@@ -166,29 +141,30 @@ namespace Tacta.EventSourcing.Projections
                     }
                     catch (Exception ex)
                     {
-                        var exMessage =
-                            $"ProjectionAgent: Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}";
-
-                        try
+                        HandleException(new AggregateException(new[]
                         {
-                            var exception = new AggregateException(new[]
-                            {
-                                    new Exception(exMessage),
-                                    ex
-                                });
+                            new Exception($"ProjectionAgent: Unable to apply {@event.GetType().Name} event for {projection.GetType().Name} projection: {ex.Message}"),
+                            ex
+                        }));
 
-                            _configuration.ExceptionHandler?.Handle(exception);
-                        }
-                        finally
-                        {
-                            Console.WriteLine(exMessage);
-                        }
                         break;
                     }
                 }
             }
         }
 
-        private void ToggleDispatchProgress() => _dispatchInProgress = !_dispatchInProgress;
+        private void HandleException(Exception ex)
+        {
+            try
+            {
+                _configuration.ExceptionHandler.Handle(ex);
+            }
+            catch (Exception e)
+            {
+                // Log to console if exception handler fails for some reason
+                Console.WriteLine($"ProjectionAgent Exception thrown: {ex}");
+                Console.WriteLine($"Unable to call external exception handler due to {e}");
+            }
+        }
     }
 }
