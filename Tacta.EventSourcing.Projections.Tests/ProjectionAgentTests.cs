@@ -1,8 +1,10 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NSubstitute;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Tacta.EventSourcing.Projections.Tests.Fakes;
 
 namespace Tacta.EventSourcing.Projections.Tests
@@ -171,13 +173,13 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             eventStream
                 .Load(1, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)))
-                .Returns(new List<IDomainEvent>()	
-            {	
-                new FooEvent(1),	
-                new FooEvent(2),	
-                new FooEvent(3),	
-                new FooEvent(4),	
-                new FooEvent(5),	
+                .Returns(new List<IDomainEvent>()
+            {
+                new FooEvent(1),
+                new FooEvent(2),
+                new FooEvent(3),
+                new FooEvent(4),
+                new FooEvent(5),
             });
 
             eventStream
@@ -208,7 +210,7 @@ namespace Tacta.EventSourcing.Projections.Tests
                 config.PeekIntervalMilliseconds = 1;
             });
 
-           Thread.Sleep(100);
+            Thread.Sleep(100);
 
             disposable.Dispose();
 
@@ -269,48 +271,43 @@ namespace Tacta.EventSourcing.Projections.Tests
             eventStream.Received().Load(10, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)));
         }
 
-        // Test if projection throws, other projections are built
-        // Test other exceptions - assert building continues
-        // Test ResetOffset
         [TestMethod]
-        public void TestProjectionAgentWithProjectionLockCallsIProjectionHandle()
+        public void TestProjectionAgentHandlesHighConcurrency()
         {
             var eventStream = Substitute.For<IEventStream>();
 
-            var subscriptions = new List<string> { typeof(FooEvent).Name };
-
             eventStream
-                .Load(1, 50, subscriptions)
+                .Load(1, 50, Arg.Any<IEnumerable<string>>())
                 .Returns(new List<IDomainEvent>()
-            {
-                new FooEvent(1),
-            });
-
-            var projectionLock = Substitute.For<IProjectionLock>();
-                projectionLock.IsActiveProjection(Arg.Any<string>()).Returns(true);
+                {
+                        new FooEvent(1),
+                        new FooEvent(2),
+                        new FooEvent(3),
+                        new FooEvent(4),
+                        new FooEvent(5),
+                });
 
             const string activeIdentity = "identity";
 
-            var projection = Substitute.For<IProjection>();
-
-            projection.Subscriptions().Returns(subscriptions);
+            var projectionRepo = new ProjectionStateRepository();
+            var projection = new FooTrackingProjection(projectionRepo);
 
             var projectionAgent = new ProjectionAgent(eventStream,
-                new[] { projection }, 
-                projectionLock,
+                new[] { projection },
+                projectionRepo,
                 activeIdentity);
 
             var disposable = projectionAgent.Run(config =>
             {
                 config.BatchSize = 50;
-                config.PeekIntervalMilliseconds = 1;
+                config.PeekIntervalMilliseconds = 10;
             });
 
-            Thread.Sleep(100);
+            Thread.Sleep(3000);
 
             disposable.Dispose();
 
-            projection.Received().HandleEvent(Arg.Any<IDomainEvent>());
+            Assert.AreEqual(5, projection.Called);
         }
 
         [TestMethod]
@@ -349,7 +346,7 @@ namespace Tacta.EventSourcing.Projections.Tests
             eventStream.Received().Load(21, 50, Arg.Is<List<string>>(x => subscriptions2.SequenceEqual(x)));
         }
 
-        
+
         [TestMethod]
         public void TestProjectionAgentQueriesEventStreamByCorrespondingProjectionOffset()
         {
@@ -363,8 +360,8 @@ namespace Tacta.EventSourcing.Projections.Tests
                 .Load(1, 3, Arg.Is<List<string>>(x => subscriptions1.SequenceEqual(x)))
                 .Returns(new List<IDomainEvent>
                 {
-                    new FooEvent(1), 
-                    new FooEvent(2), 
+                    new FooEvent(1),
+                    new FooEvent(2),
                     new FooEvent(3)
                 });
 

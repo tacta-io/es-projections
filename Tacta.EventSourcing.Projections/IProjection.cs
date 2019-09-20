@@ -14,5 +14,7 @@ namespace Tacta.EventSourcing.Projections
 
         // Should return list of names of events relevant to the projection
         List<string> Subscriptions();
+
+        void ResetOffset();
     }
 }

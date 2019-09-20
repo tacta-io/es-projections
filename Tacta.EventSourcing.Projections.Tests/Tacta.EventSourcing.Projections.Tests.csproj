@@ -66,8 +66,10 @@
     <Compile Include="Fakes\BooEvent.cs" />
     <Compile Include="Fakes\BooProjection.cs" />
     <Compile Include="Fakes\FooEvent.cs" />
+    <Compile Include="Fakes\FooTrackingProjection.cs" />
     <Compile Include="Fakes\FooProjection.cs" />
     <Compile Include="Fakes\MooProjection.cs" />
+    <Compile Include="Fakes\ProjectionStateRepository.cs" />
     <Compile Include="ProjectionAgentTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
