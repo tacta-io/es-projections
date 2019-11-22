@@ -32,15 +32,15 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             var projectionAgent = new ProjectionAgent(eventStream, new[] { projection });
 
-            var disposable = projectionAgent.Run(config =>
+            projectionAgent.Run(config =>
             {
                 config.BatchSize = 50;
-                config.PeekIntervalMilliseconds = 1;
+                config.PollingInterval = 1;
             });
 
-            Thread.Sleep(100);
+            Thread.Sleep(300);
 
-            disposable.Dispose();
+            projectionAgent.Dispose();
 
             projection.Received().HandleEvent(Arg.Any<IDomainEvent>());
         }
@@ -71,15 +71,15 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             var projectionAgent = new ProjectionAgent(eventStream, new IProjection[] { projection1 });
 
-            var disposable = projectionAgent.Run(config =>
+            projectionAgent.Run(config =>
             {
                 config.BatchSize = 50;
-                config.PeekIntervalMilliseconds = 1;
+                config.PollingInterval = 1;
             });
 
             Thread.Sleep(100);
 
-            disposable.Dispose();
+            projectionAgent.Dispose();
 
             Assert.AreEqual(1, projection1.Called);
         }
@@ -111,15 +111,15 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             var projectionAgent = new ProjectionAgent(eventStream, new IProjection[] { projection1, projection2 });
 
-            var disposable = projectionAgent.Run(config =>
+            projectionAgent.Run(config =>
             {
                 config.BatchSize = 50;
-                config.PeekIntervalMilliseconds = 1;
+                config.PollingInterval = 1;
             });
 
             Thread.Sleep(100);
 
-            disposable.Dispose();
+            projectionAgent.Dispose();
 
             Assert.AreEqual(5, projection1.Called);
             Assert.AreEqual(5, projection2.Called);
@@ -151,15 +151,15 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             var projectionAgent = new ProjectionAgent(eventStream, new IProjection[] { projection1, projection2 });
 
-            var disposable = projectionAgent.Run(config =>
+            projectionAgent.Run(config =>
             {
                 config.BatchSize = 50;
-                config.PeekIntervalMilliseconds = 1;
+                config.PollingInterval = 1;
             });
 
             Thread.Sleep(100);
 
-            disposable.Dispose();
+            projectionAgent.Dispose();
 
             eventStream.Received(2).Load(1, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)));
         }
@@ -204,15 +204,15 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             var projectionAgent = new ProjectionAgent(eventStream, new IProjection[] { projection1, projection2 });
 
-            var disposable = projectionAgent.Run(config =>
+            projectionAgent.Run(config =>
             {
                 config.BatchSize = 50;
-                config.PeekIntervalMilliseconds = 1;
+                config.PollingInterval = 1;
             });
 
             Thread.Sleep(100);
 
-            disposable.Dispose();
+            projectionAgent.Dispose();
 
             eventStream.Received(1).Load(1, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)));
             eventStream.Received(1).Load(15, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)));
@@ -258,15 +258,15 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             var projectionAgent = new ProjectionAgent(eventStream, new IProjection[] { projection1, projection2 });
 
-            var disposable = projectionAgent.Run(config =>
+            projectionAgent.Run(config =>
             {
                 config.BatchSize = 50;
-                config.PeekIntervalMilliseconds = 1;
+                config.PollingInterval = 1;
             });
 
             Thread.Sleep(100);
 
-            disposable.Dispose();
+            projectionAgent.Dispose();
 
             eventStream.Received().Load(10, 50, Arg.Is<List<string>>(x => subscriptions.SequenceEqual(x)));
         }
@@ -297,15 +297,15 @@ namespace Tacta.EventSourcing.Projections.Tests
                 projectionRepo,
                 activeIdentity);
 
-            var disposable = projectionAgent.Run(config =>
+            projectionAgent.Run(config =>
             {
                 config.BatchSize = 50;
-                config.PeekIntervalMilliseconds = 10;
+                config.PollingInterval = 10;
             });
 
             Thread.Sleep(3000);
 
-            disposable.Dispose();
+            projectionAgent.Dispose();
 
             Assert.AreEqual(5, projection.Called);
         }
@@ -332,15 +332,15 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             var projectionAgent = new ProjectionAgent(eventStream, new IProjection[] { projection1, projection2 });
 
-            var disposable = projectionAgent.Run(config =>
+            projectionAgent.Run(config =>
             {
                 config.BatchSize = 50;
-                config.PeekIntervalMilliseconds = 1;
+                config.PollingInterval = 1;
             });
 
             Thread.Sleep(100);
 
-            disposable.Dispose();
+            projectionAgent.Dispose();
 
             eventStream.Received().Load(1, 50, Arg.Is<List<string>>(x => subscriptions1.SequenceEqual(x)));
             eventStream.Received().Load(21, 50, Arg.Is<List<string>>(x => subscriptions2.SequenceEqual(x)));
@@ -387,15 +387,15 @@ namespace Tacta.EventSourcing.Projections.Tests
 
             var projectionAgent = new ProjectionAgent(eventStream, new IProjection[] { projection1, projection2 });
 
-            var disposable = projectionAgent.Run(config =>
+            projectionAgent.Run(config =>
             {
                 config.BatchSize = 3;
-                config.PeekIntervalMilliseconds = 1;
+                config.PollingInterval = 1;
             });
 
             Thread.Sleep(100);
 
-            disposable.Dispose();
+            projectionAgent.Dispose();
 
             eventStream.Received().Load(1, 3, Arg.Is<List<string>>(x => subscriptions1.SequenceEqual(x)));
             eventStream.Received().Load(21, 3, Arg.Is<List<string>>(x => subscriptions2.SequenceEqual(x)));

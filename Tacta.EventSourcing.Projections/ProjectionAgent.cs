@@ -2,17 +2,23 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Timers;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Tacta.EventSourcing.Projections
 {
-    public class ProjectionAgent
+    public class ProjectionAgent : IDisposable
     {
         public class Configuration
         {
             public int BatchSize { get; set; } = 100;
 
-            public double PeekIntervalMilliseconds { get; set; } = 1000;
+            public int KeepAliveInterval { get; set; } = 1000;
+
+            // NOTE - Should be less than the value from projection lock repo 
+            public int KeepAliveTimeout { get; set; } = 2000;
+
+            public int PollingInterval { get; set; } = 200;
 
             public IHandleException ExceptionHandler { get; private set; } =
                 new ConsoleExceptionHandler();
@@ -25,7 +31,9 @@ namespace Tacta.EventSourcing.Projections
 
         private readonly Configuration _configuration = new Configuration();
 
-        private IDisposable _timer;
+        private bool _disposed = false;
+
+        private volatile bool _isActive = false;
 
         private readonly IEventStream _eventStream;
 
@@ -34,8 +42,6 @@ namespace Tacta.EventSourcing.Projections
         private readonly IProjectionLock _projectionLock;
 
         private readonly string _agentId;
-
-        private volatile bool _buildInProgress;
 
         public ProjectionAgent(IEventStream eventStream,
             IProjection[] projections,
@@ -51,77 +57,83 @@ namespace Tacta.EventSourcing.Projections
             _agentId = agentId;
         }
 
-        public IDisposable Run(Action<Configuration> config)
+        public void Run(Action<Configuration> config)
         {
-            config.Invoke(_configuration);
-            return Run();
+            config(_configuration);
+            Run();
         }
 
-        public IDisposable Run()
+        public void Run()
         {
-            var timer = new Timer();
-
-            timer.Elapsed += MainLoop;
-            timer.Interval = _configuration.PeekIntervalMilliseconds;
-            timer.Enabled = true;
-
-            _timer = timer;
-
-            return _timer;
+            StartKeepAliveLoop();
+            RunMainLoop();
         }
 
-        public void MainLoop(object source, ElapsedEventArgs e)
+        public void StartKeepAliveLoop()
         {
-            if (_buildInProgress)
+            if (!IsUsingLocking())
             {
-                // Keep projection active in case of unexpected delays
-                // while the projection build is in progress.
-                RefreshActiveTimestamp();
+                _isActive = true;
                 return;
             }
 
-            try
+            Task.Run(() =>
             {
-                _buildInProgress = true;
-
-                if (IsUsingLocking() && !IsProjectionActive())
+                while (!_disposed)
                 {
-                    Console.WriteLine($"Process {_agentId} is not active");
+                    Task.Delay(_configuration.KeepAliveInterval).GetAwaiter().GetResult();
 
-                    // After becoming inactive, reset projection offsets
-                    // to 0, which will cause each projection to re-read 
-                    // the offset from the database.
-                    ResetProjections();
+                    try
+                    {
+                        // TODO - We need timeout here (configurable) that set's agent as inactive
+                        // NOTE - Needs to be less than 
+                        //_isActive = false;
 
-                    return;
+                        _isActive = IsUsingLocking() && IsProjectionActive();
+                    }
+                    catch (Exception ex)
+                    {
+                        HandleException(ex);
+                    }
                 }
-
-                Console.WriteLine($"Process {_agentId} is now active");
-
-                BuildProjections();
-            }
-            catch (Exception ex)
-            {
-                HandleException(ex);
-            }
-            finally
-            {
-                _buildInProgress = false;
-            }
+            });
         }
 
-        private void RefreshActiveTimestamp()
+        public void RunMainLoop()
         {
-            if (!IsUsingLocking()) return;
+            Task.Run(() =>
+            {
+                while (true)
+                {
+                    if (_disposed) break;
 
-            try
-            {
-                IsProjectionActive();
-            }
-            catch (Exception ex)
-            {
-                HandleException(ex);
-            }
+                    Task.Delay(_configuration.PollingInterval).GetAwaiter().GetResult();
+
+                    try
+                    {
+                        if (!_isActive)
+                        {
+                            Console.WriteLine($"Process {_agentId} is not active");
+
+                            // After becoming inactive, reset projection offsets
+                            // to 0, which will cause each projection to re-read 
+                            // the offset from the database.
+                            ResetProjections();
+
+                            continue;
+                        }
+
+                        Console.WriteLine($"Process {_agentId} is now active");
+
+                        BuildProjections();
+                    }
+                    catch (Exception ex)
+                    {
+                        HandleException(ex);
+                    }
+                }
+
+            });
         }
 
         private bool IsUsingLocking() =>
@@ -155,6 +167,8 @@ namespace Tacta.EventSourcing.Projections
                 {
                     try
                     {
+                        if (!_isActive) return;
+
                         projection.HandleEvent(@event).GetAwaiter().GetResult();
                     }
                     catch (Exception ex)
@@ -183,6 +197,12 @@ namespace Tacta.EventSourcing.Projections
                 Console.WriteLine($"ProjectionAgent Exception thrown: {ex}");
                 Console.WriteLine($"Unable to call external exception handler due to {e}");
             }
+        }
+
+        public void Dispose()
+        {
+            // TODO - Handle this better
+            _disposed = true;
         }
     }
 }
