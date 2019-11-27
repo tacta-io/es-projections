@@ -38,7 +38,7 @@ namespace Tacta.EventSourcing.Projections.Tests
                 config.PollingInterval = 1;
             });
 
-            Thread.Sleep(300);
+            Thread.Sleep(1000);
 
             projectionAgent.Dispose();
 

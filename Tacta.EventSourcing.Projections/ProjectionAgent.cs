@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -15,9 +16,6 @@ namespace Tacta.EventSourcing.Projections
 
             public int KeepAliveInterval { get; set; } = 1000;
 
-            // NOTE - Should be less than the value from projection lock repo 
-            public int KeepAliveTimeout { get; set; } = 2000;
-
             public int PollingInterval { get; set; } = 200;
 
             public IHandleException ExceptionHandler { get; private set; } =
@@ -31,7 +29,9 @@ namespace Tacta.EventSourcing.Projections
 
         private readonly Configuration _configuration = new Configuration();
 
-        private bool _disposed = false;
+        private readonly CancellationTokenSource _cts = new CancellationTokenSource();
+
+        private readonly CancellationToken _cancellationToken;
 
         private volatile bool _isActive = false;
 
@@ -48,6 +48,8 @@ namespace Tacta.EventSourcing.Projections
             IProjectionLock projectionLock = null,
             string agentId = null)
         {
+            _cancellationToken = _cts.Token;
+
             _eventStream = eventStream ?? throw new InvalidEnumArgumentException("ProjectionAgent: You have to provide an event stream");
             _projections = projections.ToList();
 
@@ -65,47 +67,55 @@ namespace Tacta.EventSourcing.Projections
 
         public void Run()
         {
-            StartKeepAliveLoop();
+            if (IsUsingLocking())
+                RunKeepAliveLoop();
+            else
+                _isActive = true;
+
             RunMainLoop();
         }
 
-        public void StartKeepAliveLoop()
-        {
-            if (!IsUsingLocking())
-            {
-                _isActive = true;
-                return;
-            }
-
-            Task.Run(() =>
-            {
-                while (!_disposed)
-                {
-                    Task.Delay(_configuration.KeepAliveInterval).GetAwaiter().GetResult();
-
-                    try
-                    {
-                        // TODO - We need timeout here (configurable) that set's agent as inactive
-                        // NOTE - Needs to be less than 
-                        //_isActive = false;
-
-                        _isActive = IsUsingLocking() && IsProjectionActive();
-                    }
-                    catch (Exception ex)
-                    {
-                        HandleException(ex);
-                    }
-                }
-            });
-        }
-
-        public void RunMainLoop()
+        public void RunKeepAliveLoop()
         {
             Task.Run(() =>
             {
                 while (true)
                 {
-                    if (_disposed) break;
+                    if (_cancellationToken.IsCancellationRequested) break;
+
+                    Task.Delay(_configuration.KeepAliveInterval).GetAwaiter().GetResult();
+
+                    var checkIfActiveTask = Task.Run(() =>
+                    {
+                        try
+                        {
+                            _isActive = IsProjectionActive();
+                        }
+                        catch (Exception ex)
+                        {
+                            HandleException(ex);
+                        }
+                    });
+
+                    if (!checkIfActiveTask.Wait(_configuration.KeepAliveInterval)) _isActive = false;
+                }
+            }, _cancellationToken);
+        }
+
+        private bool IsUsingLocking() =>
+            _projectionLock != null && !string.IsNullOrEmpty(_agentId);
+
+        private bool IsProjectionActive() =>
+            _projectionLock.IsActiveProjection(_agentId).GetAwaiter().GetResult();
+
+        public void RunMainLoop()
+        {
+            // TODO - Start task for each projection
+            Task.Run(() =>
+            {
+                while (true)
+                {
+                    if (_cancellationToken.IsCancellationRequested) break;
 
                     Task.Delay(_configuration.PollingInterval).GetAwaiter().GetResult();
 
@@ -132,27 +142,12 @@ namespace Tacta.EventSourcing.Projections
                         HandleException(ex);
                     }
                 }
-
-            });
-        }
-
-        private bool IsUsingLocking() =>
-            _projectionLock != null && !string.IsNullOrEmpty(_agentId);
-
-        private bool IsProjectionActive() =>
-            _projectionLock.IsActiveProjection(_agentId).GetAwaiter().GetResult();
-
-        private void ResetProjections()
-        {
-            foreach (var projection in _projections)
-            {
-                projection.ResetOffset();
-            }
+            }, _cancellationToken);
         }
 
         private void BuildProjections()
         {
-            foreach (var projection in _projections.OrderBy(p => p.Offset().GetAwaiter().GetResult()))
+            foreach (var projection in _projections)
             {
                 var offset = projection.Offset().GetAwaiter().GetResult();
 
@@ -167,7 +162,12 @@ namespace Tacta.EventSourcing.Projections
                 {
                     try
                     {
-                        if (!_isActive) return;
+                        if (!_isActive)
+                        {
+                            ResetProjections();
+
+                            return;
+                        }
 
                         projection.HandleEvent(@event).GetAwaiter().GetResult();
                     }
@@ -182,6 +182,14 @@ namespace Tacta.EventSourcing.Projections
                         break;
                     }
                 }
+            }
+        }
+
+        private void ResetProjections()
+        {
+            foreach (var projection in _projections)
+            {
+                projection.ResetOffset();
             }
         }
 
@@ -201,8 +209,7 @@ namespace Tacta.EventSourcing.Projections
 
         public void Dispose()
         {
-            // TODO - Handle this better
-            _disposed = true;
+            _cts.Cancel();
         }
     }
 }
