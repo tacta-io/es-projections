@@ -1,18 +1,22 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Timers;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Tacta.EventSourcing.Projections
 {
-    public class ProjectionAgent
+    public class ProjectionAgent : IDisposable
     {
         public class Configuration
         {
             public int BatchSize { get; set; } = 100;
 
-            public double PeekIntervalMilliseconds { get; set; } = 1000;
+            public int KeepAliveInterval { get; set; } = 1000;
+
+            public int PollingInterval { get; set; } = 200;
 
             public IHandleException ExceptionHandler { get; private set; } =
                 new ConsoleExceptionHandler();
@@ -25,7 +29,11 @@ namespace Tacta.EventSourcing.Projections
 
         private readonly Configuration _configuration = new Configuration();
 
-        private IDisposable _timer;
+        private readonly CancellationTokenSource _cts = new CancellationTokenSource();
+
+        private readonly CancellationToken _cancellationToken;
+
+        private volatile bool _isActive = false;
 
         private readonly IEventStream _eventStream;
 
@@ -35,13 +43,13 @@ namespace Tacta.EventSourcing.Projections
 
         private readonly string _agentId;
 
-        private volatile bool _buildInProgress;
-
         public ProjectionAgent(IEventStream eventStream,
             IProjection[] projections,
             IProjectionLock projectionLock = null,
             string agentId = null)
         {
+            _cancellationToken = _cts.Token;
+
             _eventStream = eventStream ?? throw new InvalidEnumArgumentException("ProjectionAgent: You have to provide an event stream");
             _projections = projections.ToList();
 
@@ -51,77 +59,47 @@ namespace Tacta.EventSourcing.Projections
             _agentId = agentId;
         }
 
-        public IDisposable Run(Action<Configuration> config)
+        public void Run(Action<Configuration> config)
         {
-            config.Invoke(_configuration);
-            return Run();
+            config(_configuration);
+            Run();
         }
 
-        public IDisposable Run()
+        public void Run()
         {
-            var timer = new Timer();
+            if (IsUsingLocking())
+                RunKeepAliveLoop();
+            else
+                _isActive = true;
 
-            timer.Elapsed += MainLoop;
-            timer.Interval = _configuration.PeekIntervalMilliseconds;
-            timer.Enabled = true;
-
-            _timer = timer;
-
-            return _timer;
+            RunMainLoop();
         }
 
-        public void MainLoop(object source, ElapsedEventArgs e)
+        public void RunKeepAliveLoop()
         {
-            if (_buildInProgress)
+            Task.Run(() =>
             {
-                // Keep projection active in case of unexpected delays
-                // while the projection build is in progress.
-                RefreshActiveTimestamp();
-                return;
-            }
-
-            try
-            {
-                _buildInProgress = true;
-
-                if (IsUsingLocking() && !IsProjectionActive())
+                while (true)
                 {
-                    Console.WriteLine($"Process {_agentId} is not active");
+                    if (_cancellationToken.IsCancellationRequested) break;
 
-                    // After becoming inactive, reset projection offsets
-                    // to 0, which will cause each projection to re-read 
-                    // the offset from the database.
-                    ResetProjections();
+                    Task.Delay(_configuration.KeepAliveInterval).GetAwaiter().GetResult();
 
-                    return;
+                    var checkIfActiveTask = Task.Run(() =>
+                    {
+                        try
+                        {
+                            _isActive = IsProjectionActive();
+                        }
+                        catch (Exception ex)
+                        {
+                            HandleException(ex);
+                        }
+                    });
+
+                    if (!checkIfActiveTask.Wait(_configuration.KeepAliveInterval)) _isActive = false;
                 }
-
-                Console.WriteLine($"Process {_agentId} is now active");
-
-                BuildProjections();
-            }
-            catch (Exception ex)
-            {
-                HandleException(ex);
-            }
-            finally
-            {
-                _buildInProgress = false;
-            }
-        }
-
-        private void RefreshActiveTimestamp()
-        {
-            if (!IsUsingLocking()) return;
-
-            try
-            {
-                IsProjectionActive();
-            }
-            catch (Exception ex)
-            {
-                HandleException(ex);
-            }
+            }, _cancellationToken);
         }
 
         private bool IsUsingLocking() =>
@@ -130,17 +108,46 @@ namespace Tacta.EventSourcing.Projections
         private bool IsProjectionActive() =>
             _projectionLock.IsActiveProjection(_agentId).GetAwaiter().GetResult();
 
-        private void ResetProjections()
+        public void RunMainLoop()
         {
-            foreach (var projection in _projections)
+            // TODO - Start task for each projection
+            Task.Run(() =>
             {
-                projection.ResetOffset();
-            }
+                while (true)
+                {
+                    if (_cancellationToken.IsCancellationRequested) break;
+
+                    Task.Delay(_configuration.PollingInterval).GetAwaiter().GetResult();
+
+                    try
+                    {
+                        if (!_isActive)
+                        {
+                            Console.WriteLine($"Process {_agentId} is not active");
+
+                            // After becoming inactive, reset projection offsets
+                            // to 0, which will cause each projection to re-read 
+                            // the offset from the database.
+                            ResetProjections();
+
+                            continue;
+                        }
+
+                        Console.WriteLine($"Process {_agentId} is now active");
+
+                        BuildProjections();
+                    }
+                    catch (Exception ex)
+                    {
+                        HandleException(ex);
+                    }
+                }
+            }, _cancellationToken);
         }
 
         private void BuildProjections()
         {
-            foreach (var projection in _projections.OrderBy(p => p.Offset().GetAwaiter().GetResult()))
+            foreach (var projection in _projections)
             {
                 var offset = projection.Offset().GetAwaiter().GetResult();
 
@@ -155,6 +162,13 @@ namespace Tacta.EventSourcing.Projections
                 {
                     try
                     {
+                        if (!_isActive)
+                        {
+                            ResetProjections();
+
+                            return;
+                        }
+
                         projection.HandleEvent(@event).GetAwaiter().GetResult();
                     }
                     catch (Exception ex)
@@ -171,6 +185,14 @@ namespace Tacta.EventSourcing.Projections
             }
         }
 
+        private void ResetProjections()
+        {
+            foreach (var projection in _projections)
+            {
+                projection.ResetOffset();
+            }
+        }
+
         private void HandleException(Exception ex)
         {
             try
@@ -183,6 +205,11 @@ namespace Tacta.EventSourcing.Projections
                 Console.WriteLine($"ProjectionAgent Exception thrown: {ex}");
                 Console.WriteLine($"Unable to call external exception handler due to {e}");
             }
+        }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
         }
     }
 }
