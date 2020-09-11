@@ -27,9 +27,16 @@ namespace Tacta.EventSourcing.Projections.Tests.Fakes
             _agent2 = agent2;
         }
 
-        public Task<int> GetOffset()
+        public Task<int> GetOffset(string projection)
         {
             return Task.FromResult(_offset);
+        }
+
+        public Task SaveOffset(int offset, string projection)
+        {
+            _offset = offset;
+
+            return Task.CompletedTask;
         }
 
         public void SetOffset(int offset)
