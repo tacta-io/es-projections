@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Transactions;
 
 namespace Tacta.EventSourcing.Projections
 {
@@ -22,19 +23,24 @@ namespace Tacta.EventSourcing.Projections
 
             var t = GetType();
 
-            var mtd = t.GetMethod("Handle", new Type[] { @event.GetType() });
+            var mtd = t.GetMethod("Handle", new Type[] {@event.GetType()});
 
-            if (mtd == null) return;
+            using (var tx = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
+            {
+                if (mtd != null)
+                    await (Task) mtd.Invoke(this, new object[] {@event});
 
-            await (Task)mtd?.Invoke(this, new object[] { @event });
+                await _projectionStateRepository.SaveOffset(@event.Sequence, GetType().Name);
+
+                tx.Complete();
+            }
 
             _currentOffset = @event.Sequence;
         }
 
         public virtual async Task<int> Offset()
         {
-            if (_currentOffset == 0)
-                _currentOffset = await _projectionStateRepository.GetOffset();
+            _currentOffset = await _projectionStateRepository.GetOffset(GetType().Name);
 
             return _currentOffset;
         }
@@ -42,10 +48,10 @@ namespace Tacta.EventSourcing.Projections
         public virtual List<string> Subscriptions()
         {
             return GetType()
-                .GetInterfaces()
-                .Where(x => x.Name.Contains(typeof(IHandleEvent<>).Name))
-                .Select(x => x.GenericTypeArguments?.FirstOrDefault()?.Name)
-                .ToList();
+                   .GetInterfaces()
+                   .Where(x => x.Name.Contains(typeof(IHandleEvent<>).Name))
+                   .Select(x => x.GenericTypeArguments?.FirstOrDefault()?.Name)
+                   .ToList();
         }
 
         public void ResetOffset() => _currentOffset = 0;

@@ -6,6 +6,8 @@ namespace Tacta.EventSourcing.Projections
     {
         // GetOffset should return the sequence of the last event it processed
         // (see IHandleEvent for info on where to persist last processed sequence)
-        Task<int> GetOffset();
+        Task<int> GetOffset(string projection);
+
+        Task SaveOffset(int offset, string projection);
     }
 }
