@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Timers;
 
 namespace Tacta.EventSourcing.Projections
@@ -98,7 +99,7 @@ namespace Tacta.EventSourcing.Projections
 
                 Console.WriteLine($"Process {_agentId} is now active");
 
-                BuildProjections();
+                BuildProjections().GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
@@ -138,24 +139,22 @@ namespace Tacta.EventSourcing.Projections
             }
         }
 
-        private void BuildProjections()
+        private async Task BuildProjections()
         {
-            foreach (var projection in _projections.OrderBy(p => p.Offset().GetAwaiter().GetResult()))
+            foreach (var projection in _projections)
             {
-                var offset = projection.Offset().GetAwaiter().GetResult();
+                var offset = await projection.Offset();
 
                 var @from = offset + 1;
 
-                var events = _eventStream
-                                 .Load(@from, _configuration.BatchSize, projection.Subscriptions())
-                                 .GetAwaiter()
-                                 .GetResult() ?? new List<IDomainEvent>();
+                var events = await _eventStream
+                                 .Load(@from, _configuration.BatchSize) ?? new List<IDomainEvent>();
 
                 foreach (var @event in events)
                 {
                     try
                     {
-                        projection.HandleEvent(@event).GetAwaiter().GetResult();
+                        await projection.HandleEvent(@event);
                     }
                     catch (Exception ex)
                     {
@@ -165,7 +164,7 @@ namespace Tacta.EventSourcing.Projections
                             ex
                         }));
 
-                        break;
+                        return;
                     }
                 }
             }
