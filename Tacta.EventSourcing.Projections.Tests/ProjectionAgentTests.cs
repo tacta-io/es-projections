@@ -50,8 +50,6 @@ namespace Tacta.EventSourcing.Projections.Tests
         {
             var eventStream = Substitute.For<IEventStream>();
         
-            var subscriptions = new List<string> { typeof(FooEvent).Name };
-        
             eventStream
                 .Load(1, 50)
                 .Returns(new List<IDomainEvent>

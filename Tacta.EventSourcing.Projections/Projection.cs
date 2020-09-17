@@ -17,13 +17,15 @@ namespace Tacta.EventSourcing.Projections
             _projectionStateRepository = projectionStateRepository;
         }
 
-        public async Task HandleEvent(IDomainEvent @event)
+        public async Task HandleEvent(IDomainEvent @event, bool isLast)
         {
             if (@event.Sequence <= _currentOffset) return;
 
             var t = GetType();
 
             var mtd = t.GetMethod("Handle", new Type[] {@event.GetType()});
+
+            if(mtd == null && !isLast) return;
 
             using (var tx = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
             {

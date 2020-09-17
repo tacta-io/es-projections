@@ -150,11 +150,16 @@ namespace Tacta.EventSourcing.Projections
                 var events = await _eventStream
                                  .Load(@from, _configuration.BatchSize) ?? new List<IDomainEvent>();
 
+                var i         = 0;
+                var lastEvent = events.Count;
+                
                 foreach (var @event in events)
                 {
+                    i++;
+                    
                     try
                     {
-                        await projection.HandleEvent(@event);
+                        await projection.HandleEvent(@event, i == lastEvent);
                     }
                     catch (Exception ex)
                     {
