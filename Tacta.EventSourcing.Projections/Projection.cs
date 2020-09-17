@@ -26,7 +26,7 @@ namespace Tacta.EventSourcing.Projections
             var mtd = t.GetMethod("Handle", new Type[] {@event.GetType()});
 
             if(mtd == null && !isLast) return;
-            
+
             using (var tx = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
             {
                 if (mtd != null)
