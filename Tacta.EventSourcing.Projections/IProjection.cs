@@ -6,7 +6,7 @@ namespace Tacta.EventSourcing.Projections
     public interface IProjection
     {
         // HandleEvent should apply @event if projections current offset is higher than eventOffset  
-        Task HandleEvent(IDomainEvent @event);
+        Task HandleEvent(IDomainEvent @event, bool isLast);
 
         // Offset should return projection current offset
         // eg. double dispatch to projection state repository GetOffset and store it in memory
